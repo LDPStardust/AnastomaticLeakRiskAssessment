@@ -1,0 +1,350 @@
+---
+title: "LSU Anastomotic Leak Risk Assessment"
+author: "Lucille Peterson"
+date: "4/24/2022"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In this report, we will be examining provided 2017 LSU patient data so as to thoroughly evaluate the risk of a potentially fatal consequence of colon removal procedures - Anastomotic Leaking. The association explicitly requested to be scrutinized is risk of anastomotic leak and what is considered to be unhealthy weight levels (observed via BMI,) but the data that Meredith Grey collected and passed onto us contains far more than just each patient's BMI and whether or not the experienced leaking.
+
+```{r, include = FALSE}
+patients = read.csv("colon2017.csv", header = TRUE)
+```
+
+Beyond typical statistical apprehensions of sample size and the like, the two major points of nuance that are necessary are accounting for factors outside of BMI and incorporating the cost element into evaluating our risk assessment.
+
+## Exploratory Data Analysis
+
+```{r, include = FALSE}
+#This is all how raw data is processed. Nothing relevant to discuss with the client.
+patientsC=patients[,c(5,8:15,18:19)] #Removal of irrelevant variables
+for(i in 1:179){ #Reformatting of others to process correlation effectively
+  if(patientsC[i,4] == "AA"){
+    patientsC[i,4] = 1
+  }
+  else{
+    patientsC[i,4] = 0
+  }
+}
+patientsC[patientsC == "Female"] <- 0
+patientsC[patientsC == "Male"] <- 1
+
+patientsC[,4] = as.numeric(patientsC[,4])
+patientsC[,1] = as.numeric(patientsC[,1])
+
+attach(patientsC)
+#table(patients$Race) #1=African American, 0=White. Numeric compatibility.
+#table(patientsC$Race) #These two lines are proof that the conversion did not alter data.
+#18+11+68+1=98.
+```
+
+Without concerning ourselves with database related information (serial numbers and such), we have plenty of data to scrutinize:
+
+-Gender (Not specified if legal, birth assignment, or identity)
+
+**-BMI**
+
+-Age
+
+-Race (of which we only white and black)
+
+-Was or was not a Tobacco User
+
+-Did or did not have Diabetes
+
+-Did or did not have Artery Disease (Coronary versus Pulmonary is not specified)
+
+-Did or did not have Cancer
+
+-Albumin Volume post-operation
+
+-Operation Length in Days
+
+**-Did or did not experience Anastomotic Leaking**
+
+A pertinent detail regards the follow-up procedure of searching for leakage shortly after the colectomy is performed to prevent the worst case scenario. While obviously ideal to run whenever possible, time/money/space/labor are all finite. Identifying high-risk patients would allow for more efficient resource allocation and help save those who are most vulnerable. Furthermore, Operation Length is something that the hospital can control, thus if it could be reasoned that operation length has an impact on leakage risk, that is something the hospital can actively work to improve to further avoid leakage from occurring.
+
+We'll be observing the relationship between BMI and risk of anastomatic leaking, while also scrutinizing and contextualizing relationships other feature have with one another + these two major variables of interest, so as to not ignore potential multicollinearity.
+
+Subsets of the features are easily defined and very valuable for analysis, especially for observing correlation. Thankfully, there is no missing data to be addressed. First, Let's observe BMI and Anastomatic Leaking a bit.
+
+```{r, echo = FALSE}
+Leaks = patientsC[Anastamotic.Leak == 1,]
+NoLeaks = patientsC[Anastamotic.Leak == 0,]
+print("Patient BMI Range",quote = FALSE)
+quantile(patientsC[,2])
+print("-------------------------",quote = FALSE)
+print("Average Leak Patient BMI",quote = FALSE)
+mean(Leaks[,2])
+print("-------------------------",quote = FALSE)
+print("Average No-Leak Patient BMI",quote = FALSE)
+mean(NoLeaks[,2])
+```
+A few points of note. Out of our 179 patients, only 26 experienced anastomotic leaking, thus that data will be even more volatile with a lower sample size. With this in mind, while the average BMI for patients who had leaking was almost 3 BMI higher, between our observed percentile values (both of these averages are above the median BMI value) and lopsided sample size, this alone does not suggest a concerning relationship.
+
+While similar tables could be included for our other variables, including sub-setted data for other variables and observing BMI, it would quickly bloat this report, so we'll instead just discuss the results themselves, which are easily obtained by tallying or averaging sub-setted values: *Nope, this is not good enough. Make small tables or a few solid visualizations, not a dude trust me.*
+
+The following variables exhibited similar breakdowns in overall data and sub-setted data: Assigned Gender, Tobacco User, Diabetes, and Artery Disease. *Pray tell, what kind of breakdown was that?*
+
+Leaking patients were five years older on average than non-leaking patients (58.6 vs 53.2). There were a few dozen more white patients who didn't experience leaking than black patients (85 vs 68), however an equal 13 patients of both races had leaking. While average non-leaking patient Albumin measurements of 3.52 are not far of the overall average 3.45, the average leaking patient had a considerably lower 3.05. Finally, Operation Length on average for non-leaking patients and overall were roughly 0.12, though on average for leaking patients it was a slightly longer 0.15. *What unit of measurement is this? Hours, days? 0.12 what? 0.15 what? this could be chump change or a big deal.*
+
+In a vacuum, these results are intuitive: bodies aging and immune systems weakening, institutionalized racism often means a lower quality of living from worse financial and housing situations detrimenting health, lower albumin (more directly related to fluid leakage for *blood vessels* rather than the colon) being a potential health consequence other underlying circumstances detrimental to health.
+
+Longer operation times is less straightforward - it means more room for imperfections during colectomies which could end up causing leakage, but it also means more time take the procedure slowly and carefully.
+
+While these are potentially concerning, none are as staggering as cancer. Overall and among non-leaking patients, It's approaching a 50/50 split for those who did and did not have cancer. Out of 26 patients who experienced Anastomotic Leaking, however, *20* had cancer: *77%.* Either cancer has a lot to do with the outcome, or it is strongly connected to another factor that would result in higher risk of leakage (realistically, it's probably both, considering how much damage to one's immune system cancer can do.)
+
+Tobacco is an odd one - it is a highly popular carcinogen, thus it is unintuitive that we didn't see such a discrepancy between subsets over tobacco. However, we were not given criteria as to what qualified patients as tobacco users - someone denoted as a user could have been very irregularly smoking cigarettes, or smoking a pack a day. Without additional context or strong relationships shown, we may omit tobacco out of our modeling and discuss it outside of the model.
+
+What we've discussed here thus far are feature relationships to anastomatic leaking. Now we'll look at our other features' relationship to BMI. While most variables did not suggest significant differences between average group BMI values, non-diabetic patients only had on average BMI slightly lower than overall average at 28.3, while diabetic patients had a considerably higher 33.4 (a straightforward connection ), which is far more significant than the discrepancies found in all the other features.
+
+Since albumin levels and operation length aren't discrete, using table and means of subsets isn't quite as simple, though we can observe these factors' relationship to BMI with a pair-wise plot matrix. Might also be worth the time to graph BMI vs Leaking and BMI versus Diabetes to better visualize it.
+
+```{r, echo = FALSE}
+detach(patientsC) #ggplot update? Make it prettier?
+attach(patientsC)
+par(mfrow = c(2, 2)) 
+plot(BMI,Albumin..g.dL.)
+plot(BMI,Operative.Length)
+plot(BMI,DM)
+plot(BMI,Anastamotic.Leak)
+```
+
+With albumin levels and operation length, we don't really see a straightforward relationship. There appears to be a soft ceiling on albumin levels and operation length alike, though for albumin there aren't any of those with 2 g/dL or lower. Outside of some of the contextual explanations we discussed earlier, There's only so much to glean from these. For Diabetes and Leaking, we can roughly see higher BMI on average for diabetics and those who had leakage.
+
+Finally, let's take a peek at a correlation matrix.
+
+```{r, include=FALSE}
+library(corrplot) #Initially it seemed like a good idea to replace the base r version of this with a heat map
+library(ggcorrplot) #But these are both good visualizations for different purposes. We can somewhat see exact values.
+```
+
+```{r, echo=FALSE}
+cm = signif(cor(patientsC),digits = 2)
+corrplot(cm,method = 'number')
+
+corrm = round(cor(patientsC), 1)
+ggcorrplot(corrm, hc.order = TRUE, type = "lower",
+           outline.col = "white",
+           ggtheme = ggplot2::theme_gray,
+           colors = c("#6D9EC1", "white", "#E46726"))
+```
+
+This correlation matrix has some relatively tame and muddy looking results, which is likely due to these relationships being layered up on one another. We don't seem to have any correlation coefficients over 0.3. If you were to look at the Leak row/column, you might be tempted to think that most of these are fairly relevant, many of which moreso than BMI, and that something like Diabetes is of little concern. But when we know the connection BMI and Diabetes has, we know that isn't the whole picture. The reality is these relatively big chunks of correlations over 0.1 are actually important to address.
+
+We have to account for multicollinearity - These features demonstrate low direct correlation, though many of these factors compound on one another. BMI is going to be impacted by various health conditions, Race has socio-economic implications that challenge nutrition and health, and so on. In order to get a clearer picture, we want to try and put aside features that have mostly redundant information. The better we can understand how groups of our factors form a relationship ecosystem of sorts, the better we can more accurately track what makes it more likely to experience anastamotic leakage. This will be key for a more parametric modeling approach.
+
+### Model Development
+
+We're interested in a model that yields *percent chance risk* that gauges how likely a patient is to experience anastamotic leakage given everything else we know about them, using our yes or no categorical data. A logistic regression model will give us exactly that and is pretty flexible. One thing to keep in mind is we'll have to weigh the two different types of inaccuracies: if we overestimate risk there may be excessive follow-ups which waste resources but the hospital will rarely if ever miss leakage cases. If we underestimate risk the hospital may spend less on those follow-ups but miss someone who could be saved and have a bloody lawsuit as a result - those risks have different weights to them.
+
+We'll develop logistic regression models in a step-wise fashion, We'll evaluate our model's AIC for when it has all factors we've observed, check every model that one removes one factor, pick the model with the lowest AIC, and keep doing that until we can't improve the model anymore by omitting factors. If we understand that a cut factor has an important relationship with one not cut, we're likely getting rid of redundant information.
+
+```{r, echo = FALSE}
+#yes okay I KNOW there is syntax to pass basically all predictors but it seems to not be working rn and this does
+relationship = glm(Anastamotic.Leak ~ Gender + BMI + Age + Race + Tobacco + DM + CAD.PAD + Cancer + Albumin..g.dL. + 
+                     Operative.Length,family="binomial")
+step(relationship)
+```
+
+So, evaluating our model with AIC, what we're suggested is to drop Race, Artery Disease, and Cancer. AIC improves from 133.56 to 129.93, which is a decent improvement. Furthermore, we understand those variables to have a connection with remaining factors, primarily BMI. Cancer, an important variable, is highly correlated with Age.
+
+Another thing to point out here are the coefficient values we're getting here - they are not to scale. Recall that BMI is a highly granular set of values ranging from around 16 to 57, where the biggest coefficients here pertain to binary 0 or 1 values. BMI and Age may appear less relevant here compared to the rest, but if you were to scale them down you may or may not find them being more relevant. We can contextualize these by taking e to the coefficient's power, then dividing by one plus that quantity, to see the impact.
+
+For example:
+```{r, echo=FALSE}
+exp(0.77174) / (1 + exp(0.77174))
+exp(0.08909) / (1 + exp(0.08909))
+exp(7.71134) / (1 + exp(7.71134))
+```
+
+Here are our *probability* coefficients for Gender, BMI, and Operation Length. In short, while BMI has the lowest value here, it ranges across about 40 units, where gender is either 0 or 1 and operative length ranges across about 0.35 units. BMI is one of the more important factors here.
+
+We have our model that reduced the number of factors we're concerned about. We can compare and contrast the basic model which has everything in it with this reduced one to see how conscionable the choice is in a few different ways. First by revisiting the correlation plot:
+
+```{r, echo=FALSE}
+patientsAIC=patientsC[,c(1:3,5:6,9:11)]
+cm=signif(cor(patientsAIC),digits=2)
+corrplot(cm,method = 'number')
+
+corrm2 = round(cor(patientsAIC), 1)
+ggcorrplot(corrm, hc.order = TRUE, type = "lower",
+           outline.col = "white",
+           ggtheme = ggplot2::theme_gray,
+           colors = c("#6D9EC1", "white", "#E46726"))
+```
+
+Ultimately, since we didn't lower the AIC drastically, this may not appear very transformative. However, what was omitted involved a series of entries with higher correlation that we removed - things like Artery Disease and Race had significant correlation with several variables, thus this plot with fewer non-trivial correlation values demonstrates less multicollinearity, while leaving us with a model that is easier to parse and likely sacrifices little to no context.*Is this not a load of shit? be careful with this.*
+
+So this looks promising - it looks like we were able to address a muddling aspect of our data somewhat. But what we're *really* interested in is which high risk people get overlooked, which lower risk people are viewed as high priority - that kind of thing. How do they compare in this fashion? Once again we can save ourselves and use the car library (Companion to Applied Regression).
+
+```{r, include=FALSE}
+library(car)
+```
+
+```{r, echo=FALSE}
+trimrelation = glm(Anastamotic.Leak ~ Gender + BMI + Age + Tobacco + DM + Albumin..g.dL. + 
+                     Operative.Length,family="binomial")
+residualPlots(relationship)
+```
+
+Each graph observes Pearson Residuals compared to individual factors, as well as how our model behaves overall at the end. For most of the graphs, we'd like to see as straight a line as possible. For factor graphs, the more curvature, and the higher said curvature's magnitude, the more we doubt how we've modeled its relationship to risk of leakage. The last one is worth most of our scrutiny: It goes from low risk to higher risk left to right. Whenever it curves up, our prediction of risk is perhaps lower than it should be for that region, and if it curves down, our prediction of risk is higher than what it really is.
+
+Our main focus pertains to the right-end of the graph, in the 0 to 1 range (it graphs as far as -8 due to that starting coefficient). As it curves down as we approach the very end, we're slightly overestimating the risk of higher risk patients, which would result in perhaps more follow-up procedures than necessary - if it curved up, we could be underestimating the risk that high risk patients experience, which could mean people who need treatment for anastamotic leakage don't end up getting it. The weight of this implication relies on the cost of both the follow-up procedures compared to the damage prospects of malpractice/negligence lawsuits if leakage cases go unchecked. Of course, from the moral perspective, a downwards curve is much preferable to an upwards curve here.
+
+```{r, include = FALSE}
+exp(-2)/1+exp(-2)
+```
+
+To be specific - the probability threshold where we see this overestimating occur at is at 27% or so (-2 log odds). Patients at 27% risk of anastamotic leaking or higher will show up with percentages higher than that. But if they're more than 1 in 4 likely to experience something that could easily kill them, it's probably a good idea to go and check up on them anyways.
+
+
+Also, while they may not be as relevant, check out that Artery Disease chart! A far cry from a straight line. While most predictors have straight lines for graphs more or less (BMI's also curves down a bit like the final one, which is probably a good sign that BMI and leakage are well connected), Artery Disease is so wildly curved that it's hardly showing up on the diagnostic plot here. Certainly more support that we're probably better off without it.
+
+So, now let's see how this compares to our trimmed down model:
+
+```{r, echo = FALSE}
+residualPlots(trimrelation)
+```
+
+Looks more of the same this way for the most part, though it looks like the curve for the final chart is a bit cleaned up - same structure but marginally less skewed down, and slightly different bounds. We can get a loose idea of which variables are more relevant as well - BMI is the big one, though there appears to be a bit more swing pertaining to Albumin levels, Operation Length, and Age. Diabetes, Tobacco, and Gender don't exhibit nearly as much relevancy in the model, though we understand diabetes has a significant correlation with BMI and will reflect in our results in that fashion.
+
+```{r, echo = FALSE}
+summary(trimrelation)
+```
+
+Looking at the p-values section of the summary output for our model, the story lines up nicely with what we saw in our residual plots: we're perhaps a bit less worried about Gender/Tobacco/Diabetes - the other factors have p-values that exhibit a certain threshold of statistical significance (operation length maybe a bit less so, comparatively speaking). *Leaning on p-values huh...?*
+
+
+### Conclusions and Case Studies
+
+```{r, include = FALSE}
+exp(0.08909)
+```
+
+
+From everything we've observed, we were able to produce a strong model for assessing risk of anastamotic leaking in patients who've gotten colectomies, and an important factor in that risk is BMI. We've found that *a one unit increase in BMI is associated with a 9% increase of odds of anastamotic leaking* (multiplicative), though that naively assumes everything else does not change. Since other factors are connected to BMI, we have to also acknowledge that other factors of relevancy include things such as age, albumin levels, and operation length - most of these similarly have positive relationships with the odds of anastamotic leakage (higher age, higher BMI, longer operation time = higher risk), however higher albumin levels actually suggest a lower risk. While diabetes may seem less relevant and cancer did not make the mathematical cut to even be in our model, we understand them to be highly correlated to other factors such as Age or BMI, so the model should naturally cover the fact that Diabetes and Cancer patients are of higher risk through their impact on remaining variables.
+
+A few points regarding this model and our takeaways to round it out as best as possible. The evidence supporting operation length's connection to the risk is not nearly as strong as the other factors mentioned, so if the plan in response is to look for ways to reduce average operation time, do not compromise safety procedures to do so. Another point is that we've determined the model is willing to overstate the risk that typically higher risk patients expect to experience anastamotic leakage past the 27% threshold - a threshold which already suggests something with potentially fatal consequences already being likely. It is up to your facility and its administration to weigh the cost of follow-up procedures versus the risk of human life as well as money paid out in lawsuits for anyone who isn't followed up on and ended up experiencing leakage. Finally, one last universal formality of statistics: The data is dated and finite. There is always the risk that the data used to reach these conclusions was not wholly representative of the population at large, and that larger studies could yield more accurate results. *resampling could (partially) address this.*
+
+
+
+With that all said, there's one final point of interest. We've been given data on two patients Arizona Robbins and Richard Webber. Everything beyond their BMI we have hard, constant data on, thus we can literally hold all else constant and observe the levels of anastamotic leakage risk we expect as a function of theoretical BMI.
+
+At the time of operation, Arizona Robbins was a 35 year old white female who did not use tobacco, did not have diabetes or artery disease or cancer, and had a post-operative albumin level of 4.2 after an operation spanning 90 minutes (or 0.063 days). Conversely, at the time of operation, Richard Webber was a 62 year old black male who did use tobacco and did have diabetes (but not artery disease or cancer), had an albumin level of 2.8 after an operation spanning 210 minutes (or 0.146 days).
+
+In many respects, these two are drastically different pertaining to factors we believe have an impact on a patient's risk of anastamotic leaking, with Webber being on the side of Race/Age/Diabetes/Albumin Levels that would suggest higher risk of leakage. In our efforts to gauge their risk by BMI level, we can illustrate both BMI's relationship to leakage as well as other factors' impact on BMI and/or leakage further.
+
+We can do this by developing two series of confidence intervals to gauge the level of risk each of these two can expect to face for whatever BMI they may have along our range of about 16 to 57 - We'll see what the model suggests for a BMI of 16, 17, 18, and so on. It would look clean and presumably more encapsulating to do, say, 15 to 60, but we don't actually have data past 16 to 57, so abstaining from those regions might be a bit more responsible. One last important point of note: while we're stuck with finite data, we can be substantially more confident in our results if we're to artificially simulate versions of our data with replacement to model after, then make confidence intervals by sorting all the different risk predictions we get.
+
+```{r, include = FALSE}
+BMIR = 16:57
+###These are exact prediction values, which are almost guaranteed to be wrong. Confidence Intervals w/ bootstrapped looped data is better.
+#Robbins = data.frame(Gender=0, BMI=BMIR, Age=35, Tobacco=0, DM=0, Cancer=0, Albumin..g.dL.=4.2, Operative.Length=0.063)
+#logOddsR = -6.30447 + 0.77174*0 + 0.08909*BMIR + 0.8276*35 + 0.78186*0 - 0.86507*0 - 1.38995*4.2 + 7.71134*0.063
+#probR = exp(logOddsR)/(1 + exp(logOddsR))
+#RobbinsPred=predict(trimrelation,newdata=Robbins,interval="predict")
+#exp(RobbinsPred)/(1+exp(RobbinsPred))
+#SprobR
+```
+
+```{r, echo = FALSE}
+#Webber = data.frame(Gender=1, BMI=BMIR, Age=62, Tobacco=1, DM=1, Cancer=0, Albumin..g.dL.=2.8, Operative.Length=0.146)
+#logOddsW = -6.30447 + 0.77174*1 + 0.08909*BMI + 0.8276*62 + 0.78186*1 - 0.86507*1 - 1.38995*2.8 + 7.71134*0.146
+#probW = exp(logOddsW)/(1 + exp(logOddsW))
+#WebberPred=predict(trimrelation,newdata=Webber,interval="predict")
+#exp(WebberPred)/(1+exp(WebberPred))
+#probW
+```
+
+```{r, echo = FALSE}
+set.seed(23613)
+RobbinsRisk = matrix(rep(0),42,2)
+WebberRisk = matrix(rep(0),42,2)
+
+coefs = matrix(0,100,8)
+phat.starR = matrix(rep(0),100,42)
+phat.starW = matrix(rep(0),100,42)
+for(k in 1:100){
+
+	#Step 1, Read in the data and get our original model working and stored.
+  #This has already been done. Our model is trimrelation.
+	
+	#Step 2, Resample X's with replacement, call them BS.x
+	n = dim(patientsC)[1]
+	BS.index = sample(1:n,n,replace=T)
+	BS.x = patientsC[BS.index,c(1:3,5:6,9:10)]
+	
+	#Step 3, Put BS.x into original model, to get BS.phat.  
+	#Be careful, it wants to give us log odds.  
+	BS.phat = predict.glm(trimrelation,newdata=BS.x,type="response")
+		
+	#Step 4, sample using rbinom or just sample() from bernouli (BS.phat) distribution
+	#to get BS.y
+	####SAMPLE SMARTER THAN THIS......#### (help rbinom)
+	BS.y = rep(0,n)
+	for(i in 1:n){
+		BS.y[i] = sample(c(1,0),1,prob=c(BS.phat[i],1-BS.phat[i]))
+	}
+
+	#Step 5, New model with BS.x and BS.y. I imagine there is a more efficient way to code this, but if it works, it works.
+	newdata = data.frame(BS.y = BS.y, BS.x1 = BS.x[,1], BS.x2=BS.x[,2], BS.x3 = BS.x[,3], BS.x4 = BS.x[,4], BS.x5 = BS.x[,5], BS.x6 = BS.x[,6], BS.x7 = BS.x[,7])
+	BS.model = glm(BS.y~BS.x1+BS.x2+BS.x3+BS.x4+BS.x5+BS.x6+BS.x7,data=newdata,family="binomial")
+	
+
+	#Step 6, store Beta.hats from new model and make predictions based on our patient data.
+	ind=1
+  for(j in 16:57){
+  	BS.model.coef = BS.model$coef
+  	BS.phat.starR = predict.glm(BS.model,newdata=data.frame(BS.x1=0,BS.x2=j,BS.x3=35,BS.x4=0,
+	                                                          BS.x5=0,BS.x6=4.2,BS.x7=0.063),type="response")
+  	BS.phat.starW = predict.glm(BS.model,newdata=data.frame(BS.x1=1,BS.x2=j,BS.x3=62,BS.x4=1,
+	                                                          BS.x5=1,BS.x6=2.8,BS.x7=0.146),type="response")
+
+#Step 7, repeat 10,000 times, make our intervals.  Boom.
+
+  	coefs[k,] = BS.model.coef
+	  phat.starR[k,ind] = BS.phat.starR
+	  phat.starW[k,ind] = BS.phat.starW
+	
+    ind=ind+1
+	}
+}
+#qqnorm(coefs[,2]) #This line each time you bootstrap the model can test normality.
+```
+
+```{r, echo = FALSE}
+for(l in 1:42){
+  RobbinsRisk[l,1] = sort(phat.starR[,l])[2]
+  RobbinsRisk[l,2] = sort(phat.starR[,l])[98]
+
+  WebberRisk[l,1] = sort(phat.starW[,l])[2]
+  WebberRisk[l,2] = sort(phat.starW[,l])[98]
+
+}
+options(scipen = 6)
+
+print("Risk of Anastamotic Leaking for Arizona Robbins per BMI level",quote=FALSE)
+print("Lower Bound      Higher Bound",quote=FALSE)
+round(RobbinsRisk, digits = 6)
+print("------------------------------------------------------------------------",quote=FALSE)
+print("Risk of Anastamotic Leaking for Richard Webber per BMI level",quote=FALSE)
+print("Lower Bound      Higher Bound",quote=FALSE)
+WebberRisk
+```
+
+This is considerably more comprehensive. After thorough resampling and exhaustive simulation, we're 96% confident that each patient's true risk of anastamotic leaking ranges between these two percentages, assuming whole number BMI values going from 16 to 57, top to bottom.
+
+It's of little shock that for almost any level of BMI, 96% of the time, our low risk patient Arizona Robbins could be at as little risk as hundredths of a percent chance. On the higher end of course, as BMI increases, it can creep up to as high as almost 9%, though at lower/mid levels it struggles to breach a 2 or 3 percent threshold. Arizona and others like her are unlikely to experience anastamotic leakage, though in the event that they have a notably above average BMI level, don't entirely rule out a follow-up.
+
+A patient such as Richard Webber however practically requires a follow-up. Even at lower BMI levels where risk percentage can be as low as barely 1% if at all and takes a while to reach double digits, it can also be as high over 50%. As we approach higher BMI levels, even the lower bounds are uncharitable 20 something and 30 something percent chances of risk, and can reach as high as over 90%. We did of course discuss that our model likely overestimates at around the 25% threshold, but again, a 1 in 4 chance of something that drastic is plenty of grounds to be concerned. Unless the cost of a follow-up procedure could actually rival a sizable malpractice lawsuit, not following up on a patient like this to potentially address is highly inadvisable, even finance wise, let alone on grounds of not letting a patient die. It is difficult to suggest that it would be advisable even if the patient has a lower BMI level, though if it were ever a good idea, that would be the time.
+
+
+
+
